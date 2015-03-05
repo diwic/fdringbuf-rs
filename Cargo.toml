@@ -1,0 +1,5 @@
+[package]
+
+name = "ringbuf-rs"
+version = "0.0.1"
+authors = ["David Henningsson <david.henningsson@canonical.com>"]
