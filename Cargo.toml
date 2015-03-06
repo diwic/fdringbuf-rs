@@ -1,8 +1,13 @@
 [package]
 
-name = "ringbuf-rs"
+name = "fdringbuf"
 version = "0.0.1"
-authors = ["David Henningsson <david.henningsson@canonical.com>"]
+authors = ["David Henningsson <diwic@ubuntu.com>"]
+
+description = "Ringbuffer with FD signalling - fast IPC without memory copies!"
+repository = "https://github.com/diwic/fdringbuf-rs"
+keywords = ["ringbuffer", "fd", "IPC", "file descriptor", "eventfd"]
+license = "Apache-2.0/MIT"
 
 [dev-dependencies.nix]
 nix = "*"

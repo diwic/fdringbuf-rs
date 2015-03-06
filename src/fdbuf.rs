@@ -239,7 +239,6 @@ mod tests {
                 for z in d.iter_mut().take(400) { *z = c; total1 += c as u64; c += 1; };
                 (c as usize, false)
             }).unwrap();
-            //println!("can_send {}", can_send);
             if can_send == 0 {
                  //println!("Send wait");
                  wait_epoll(waitfd);
