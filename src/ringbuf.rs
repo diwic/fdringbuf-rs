@@ -41,7 +41,8 @@ impl<'a, T: Copy> Sender<'a, T> {
         assert!(n <= slice.len());
         let c = self.count.fetch_add(n, Ordering::SeqCst);
         self.index = (self.index + n) % l;
-        (l - c + n, cb == 0)
+        //println!("Send: cb = {}, c = {}, l = {}, n = {}", cb, c, l, n);
+        (l - c - n, c == 0 && n > 0)
     }
 
     /// Returns number of items that can be written
@@ -60,11 +61,11 @@ impl<'a, T: Copy> Receiver<'a, T> {
         let slice = &self.data[self.index .. min(self.index + cb, l)];
 
         let n = if slice.len() == 0 { 0 } else { f(slice) };
-
         assert!(n <= slice.len());
         let c = self.count.fetch_sub(n, Ordering::SeqCst);
         self.index = (self.index + n) % l;
-        return (c - n, cb >= l && n > 0)
+        //println!("Recv: cb = {}, c = {}, l = {}, n = {}", cb, c, l, n);
+        return (c - n, c >= l && n > 0)
     }
 
     /// Returns number of items that can be read
