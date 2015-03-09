@@ -28,7 +28,7 @@ unsafe impl<'a, T: Copy> Send for Sender<'a, T> {}
 unsafe impl<'a, T: Copy> Send for Receiver<'a, T> {}
 
 fn write_fd(fd: Fd) -> io::Result<()> {
-    let e = unsafe { ::libc::write(fd, &1u64 as *const _ as *const ::libc::c_void, ::std::mem::size_of::<u64>() as u64) };
+    let e = unsafe { ::libc::write(fd, &1u64 as *const _ as *const ::libc::c_void, ::std::mem::size_of::<u64>() as ::libc::size_t) };
     //println!("write {} to fd {}", e, fd);
     if e == -1 { return Err(io::Error::last_os_error()) }
     assert!(e > 0);
@@ -38,7 +38,7 @@ fn write_fd(fd: Fd) -> io::Result<()> {
 fn flush_fd(fd: Fd) -> io::Result<()> {
     type Arr = [u64; 32];
     let b: Arr = unsafe { ::std::mem::uninitialized() };
-    let e = unsafe { ::libc::read(fd, b.as_ptr() as *mut ::libc::c_void, ::std::mem::size_of::<Arr>() as u64) };
+    let e = unsafe { ::libc::read(fd, b.as_ptr() as *mut ::libc::c_void, ::std::mem::size_of::<Arr>() as ::libc::size_t) };
     //println!("read {} from fd {}", e, fd);
     if e == -1 { return Err(io::Error::last_os_error()) }
     assert!(e > 0);
