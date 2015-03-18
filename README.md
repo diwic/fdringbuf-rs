@@ -17,8 +17,8 @@ full or completely empty, there's no need to sleep or signal a wakeup.
 It's flexible:
  * By using file descriptors for signalling, you can wait on several fds at the same time.
 I e, you can have the same thread waiting for more than one buffer, if you wish.
- * You can decide what type of fd you want (eventfd, pipes, or something else).
-(If you don't know where to start, use eventfd as that would give best performance.)
+ * You can decide what type of fd you want - eventfd, pipes, or something else.
+(If you don't know where to start, use eventfd for best performance.)
 
 It's usable:
  * No allocations - suitable for real-time usage.

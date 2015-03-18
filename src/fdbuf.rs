@@ -7,7 +7,6 @@
 
 use std::os::unix::prelude::Fd;
 use std::io;
-use std::os::Pipe;
 
 use ringbuf::Sender as RSender;
 use ringbuf::Receiver as RReceiver;
@@ -151,6 +150,12 @@ impl<'a, T: Copy> Drop for Receiver<'a, T> {
 }
 */
 
+#[derive(Debug, Copy)]
+pub struct Pipe {
+    pub reader: Fd,
+    pub writer: Fd,
+}
+
 /// Creates a channel with fd signalling.
 /// Does not take ownership of the fds - they will not be closed
 /// when Sender and Receiver goes out of scope.
@@ -167,7 +172,15 @@ mod tests {
     extern crate nix;
     use self::nix::sys::epoll::*;
     use ::std::os::unix::prelude::Fd;
-    use ::std::os::{self, pipe, Pipe};
+    use super::Pipe;
+
+    fn make_pipe() -> Pipe {
+         let a = Pipe { reader: -1, writer: -1 };
+         assert_eq!(0, unsafe { ::libc::pipe(::std::mem::transmute(&a)) });
+         assert!(a.reader > 2);
+         assert!(a.writer > 2);
+         a
+    }
 
     fn make_epoll(fd: Fd) -> Fd {
         let sleep = epoll_create().unwrap();
@@ -183,7 +196,7 @@ mod tests {
 
     #[bench]
     fn pipe_send400_recv300_bufsize1024_u32(b: &mut test::Bencher) {
-        let (pipe1, pipe2) = unsafe { (pipe().unwrap(), pipe().unwrap()) };
+        let (pipe1, pipe2) = (make_pipe(), make_pipe());
         run400_300_1024_bench(b, pipe1, pipe2);
         unsafe {
             ::libc::close(pipe1.reader);
@@ -206,7 +219,7 @@ mod tests {
         }
     }
 
-    fn run400_300_1024_bench(b: &mut test::Bencher, pipe1: os::Pipe, pipe2: os::Pipe) {
+    fn run400_300_1024_bench(b: &mut test::Bencher, pipe1: Pipe, pipe2: Pipe) {
         let mut q: Vec<u8> = vec![0; ::ringbuf::channel_bufsize::<u32>(1024)];
         let (mut s, mut r) = super::channel::<u32>(&mut q, pipe1, pipe2);
 

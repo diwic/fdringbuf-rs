@@ -1,4 +1,5 @@
-#![feature(core, test, io, libc, std_misc, os, unsafe_destructor)]
+#![feature(libc, std_misc, unsafe_destructor)]
+#![cfg_attr(test, feature(test))]
 
 extern crate libc;
 
