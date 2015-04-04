@@ -5,7 +5,7 @@
 //! hence there are no functions that actually wait, just functions that give out
 //! the Fd to wait for.
 
-use std::os::unix::prelude::Fd;
+use std::os::unix::io::RawFd;
 use std::io;
 
 use ringbuf::Sender as RSender;
@@ -13,20 +13,20 @@ use ringbuf::Receiver as RReceiver;
 
 pub struct Sender<'a, T: 'a + Copy> {
     inner: RSender<'a, T>,
-    signal_fd: Fd,
-    wait_fd: Fd,
+    signal_fd: RawFd,
+    wait_fd: RawFd,
 }
 
 pub struct Receiver<'a, T: 'a + Copy> {
     inner: RReceiver<'a, T>,
-    signal_fd: Fd,
-    wait_fd: Fd,
+    signal_fd: RawFd,
+    wait_fd: RawFd,
 }
 
 unsafe impl<'a, T: Copy> Send for Sender<'a, T> {}
 unsafe impl<'a, T: Copy> Send for Receiver<'a, T> {}
 
-fn write_fd(fd: Fd) -> io::Result<()> {
+fn write_fd(fd: RawFd) -> io::Result<()> {
     let e = unsafe { ::libc::write(fd, &1u64 as *const _ as *const ::libc::c_void, ::std::mem::size_of::<u64>() as ::libc::size_t) };
     //println!("write {} to fd {}", e, fd);
     if e == -1 { return Err(io::Error::last_os_error()) }
@@ -34,7 +34,7 @@ fn write_fd(fd: Fd) -> io::Result<()> {
     Ok(())
 }
 
-fn flush_fd(fd: Fd) -> io::Result<()> {
+fn flush_fd(fd: RawFd) -> io::Result<()> {
     type Arr = [u64; 32];
     let b: Arr = unsafe { ::std::mem::uninitialized() };
     let e = unsafe { ::libc::read(fd, b.as_ptr() as *mut ::libc::c_void, ::std::mem::size_of::<Arr>() as ::libc::size_t) };
@@ -74,7 +74,7 @@ impl<'a, T: Copy> Sender<'a, T> {
     /// Returns fd to wait for, and number of items that can be written
     /// You should only wait for this fd if the number is zero.
     /// The Fd will not change during the lifetime of the sender.
-    pub fn wait_status(&self) -> (Fd, usize) {
+    pub fn wait_status(&self) -> (RawFd, usize) {
         (self.wait_fd, self.inner.write_count())
     }
 
@@ -116,7 +116,7 @@ impl<'a, T: Copy> Receiver<'a, T> {
     /// Returns fd to wait for, and number of items that can be read
     /// You should only wait for this fd if the number is zero.
     /// The Fd will not change during the lifetime of the sender.
-    pub fn wait_status(&self) -> (Fd, usize) {
+    pub fn wait_status(&self) -> (RawFd, usize) {
         (self.wait_fd, self.inner.read_count())
     }
 
@@ -150,10 +150,10 @@ impl<'a, T: Copy> Drop for Receiver<'a, T> {
 }
 */
 
-#[derive(Debug, Copy)]
+#[derive(Debug, Copy, Clone)]
 pub struct Pipe {
-    pub reader: Fd,
-    pub writer: Fd,
+    pub reader: RawFd,
+    pub writer: RawFd,
 }
 
 /// Creates a channel with fd signalling.
@@ -171,7 +171,7 @@ mod tests {
     extern crate test;
     extern crate nix;
     use self::nix::sys::epoll::*;
-    use ::std::os::unix::prelude::Fd;
+    use std::os::unix::io::RawFd;
     use super::Pipe;
 
     fn make_pipe() -> Pipe {
@@ -182,14 +182,14 @@ mod tests {
          a
     }
 
-    fn make_epoll(fd: Fd) -> Fd {
+    fn make_epoll(fd: RawFd) -> RawFd {
         let sleep = epoll_create().unwrap();
         let event = EpollEvent { data: 0, events: EPOLLIN };
         epoll_ctl(sleep, EpollOp::EpollCtlAdd, fd, &event).unwrap();
         sleep
     }
 
-    fn wait_epoll(fd: Fd) {
+    fn wait_epoll(fd: RawFd) {
         let mut events = [EpollEvent { data: 0, events: EPOLLIN }];
         assert_eq!(1, epoll_wait(fd, &mut events, 5000).unwrap());
     }

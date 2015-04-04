@@ -9,5 +9,8 @@ repository = "https://github.com/diwic/fdringbuf-rs"
 keywords = ["ringbuffer", "fd", "IPC", "filedescriptor", "eventfd"]
 license = "Apache-2.0/MIT"
 
+[dependencies]
+libc = "*"
+
 [dev-dependencies.nix]
 nix = "*"
