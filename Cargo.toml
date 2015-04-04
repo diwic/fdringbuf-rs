@@ -1,7 +1,7 @@
 [package]
 
 name = "fdringbuf"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["David Henningsson <diwic@ubuntu.com>"]
 
 description = "Ringbuffer with FD signalling - fast IPC without memory copies!"
