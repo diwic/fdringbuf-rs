@@ -220,10 +220,12 @@ mod tests {
     }
 
     fn run400_300_1024_bench(b: &mut test::Bencher, pipe1: Pipe, pipe2: Pipe) {
-        let mut q: Vec<u8> = vec![0; ::ringbuf::channel_bufsize::<u32>(1024)];
-        let (mut s, mut r) = super::channel::<u32>(&mut q, pipe1, pipe2);
+        let mut q: Vec<u8> = vec![0; ::ringbuf::channel_bufsize::<i32>(1024)];
+        // Temporary workaround until the new scoped API is stable
+        let scoped_workaround: &'static mut [u8] = unsafe { ::std::mem::transmute(&mut *q) };
+        let (mut s, mut r) = super::channel::<i32>(scoped_workaround, pipe1, pipe2);
 
-        let guard = ::std::thread::scoped(move || {
+        let guard = ::std::thread::spawn(move || {
             let mut sum = 0;
             let mut quit = false;
             let waitfd = make_epoll(r.wait_status().0);
@@ -260,7 +262,7 @@ mod tests {
         });
         s.send(|d| { d[0] = -1; (1, false) }).unwrap();
         unsafe { ::libc::close(waitfd) };
-        let total2 = guard.join();
+        let total2 = guard.join().unwrap();
         assert_eq!(total1, total2);
     }
     

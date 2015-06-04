@@ -14,3 +14,7 @@ libc = "*"
 
 [dev-dependencies.nix]
 nix = "*"
+# git = "https://github.com/carllerche/nix-rust"
+
+[features]
+default = ["nix/eventfd"]
