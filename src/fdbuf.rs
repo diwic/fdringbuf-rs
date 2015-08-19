@@ -76,11 +76,11 @@ impl<T, U> Sender<T, U> {
     /// Will not block in case the buffer gets full.
     ///
     /// Returns number of items that can be written to the buffer (0 means the buffer is full).
-    pub fn send_foreach<F: FnMut() -> T>(&mut self, count: usize, mut f: F) -> io::Result<usize> {
+    pub fn send_foreach<F: FnMut(usize) -> T>(&mut self, count: usize, mut f: F) -> io::Result<usize> {
         let mut w = 0;
-        let (mut free_items, mut was_empty) = self.inner.send_foreach(count, || { w += 1; f() });
+        let (mut free_items, mut was_empty) = self.inner.send_foreach(count, |_| { w += 1; f(w - 1) });
         if free_items > 0 && w < count {
-            let (freeitems, wempty) = self.inner.send_foreach(count - w, || { w += 1; f() });
+            let (freeitems, wempty) = self.inner.send_foreach(count - w, |_| { w += 1; f(w - 1) });
             was_empty |= wempty;
             free_items = freeitems;
         }
@@ -245,14 +245,14 @@ mod tests {
         let waitfd = make_epoll(s.wait_status().0);
         b.iter(|| {
             let mut c = 0;
-            let can_send = s.send_foreach(400, || { c += 1; total1 += c as u64; c }).unwrap();
+            let can_send = s.send_foreach(400, |_| { c += 1; total1 += c as u64; c }).unwrap();
             if can_send == 0 {
                  debug!("Send wait");
                  wait_epoll(waitfd);
                  s.wait_clear().unwrap();
             };
         });
-        s.send_foreach(1, || -1).unwrap();
+        s.send_foreach(1, |_| -1).unwrap();
         unsafe { ::libc::close(waitfd) };
         let total2 = guard.join().unwrap();
         assert_eq!(total1, total2);

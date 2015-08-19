@@ -15,13 +15,12 @@ enum Protocol {
 fn send_data<U>(i: i32, mut s: fdbuf::Sender<Protocol, U>) {
     use std::thread;
 
-    s.send_foreach(1, || Protocol::Hello(i)).unwrap();
+    s.send_foreach(1, |_| Protocol::Hello(i)).unwrap();
     thread::sleep_ms(100);
-    let mut dummy = 0;
-    s.send_foreach(6, || { dummy += 1; Protocol::Data(dummy) }).unwrap();
+    s.send_foreach(6, |j| Protocol::Data(j as u8)).unwrap();
 
     thread::sleep_ms(100);
-    s.send_foreach(1, || Protocol::Goodbye).unwrap();
+    s.send_foreach(1, |_| Protocol::Goodbye).unwrap();
 }
 
 struct MyReceiver(Vec<fdbuf::Receiver<Protocol, Vec<u8>>>, Vec<mio::Io>, i32);

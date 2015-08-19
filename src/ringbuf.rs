@@ -109,13 +109,13 @@ impl<T, U> Sender<T, U> {
     /// and depend on RVO to avoid memory copies.
     ///
     /// Returns (free items, was empty) like send does
-    pub fn send_foreach<F: FnMut() -> T>(&mut self, count: usize, mut f: F) -> (usize, bool) {
+    pub fn send_foreach<F: FnMut(usize) -> T>(&mut self, count: usize, mut f: F) -> (usize, bool) {
         use std::ptr;
 
         let mut i = 0;
         self.send(|p, c| {
             while i < c && i < count {
-                unsafe { ptr::write(p.offset(i as isize), f()) };
+                unsafe { ptr::write(p.offset(i as isize), f(i)) };
                 i += 1;
             };
             i
@@ -181,7 +181,7 @@ mod tests {
         r.recv(|_| panic!());
 
         let mut i = 6;
-        s.send_foreach(2, || { i += 1; i } );
+        s.send_foreach(2, |_| { i += 1; i } );
         r.recv(|d| { assert_eq!(d.len(), 2);
             assert_eq!(d[0], 7);
             assert_eq!(d[1], 8);
@@ -199,7 +199,12 @@ mod tests {
             2
         });
         let mut called = false;
-        s.send_foreach(2, || { assert_eq!(called, false); called = true; 10 });
+        s.send_foreach(2, |i| {
+            assert_eq!(called, false);
+            assert_eq!(i, 0);
+            called = true;
+            10
+        });
         s.send(|_, _| panic!());
         r.recv(|d| { assert_eq!(d.len(), 3); 0 });
         s.send(|_, _| panic!());
@@ -248,7 +253,7 @@ mod tests {
         let (mut total1, mut total2) = (0u64, 0u64);
         b.iter(|| {
             let mut c = 0;
-            s.send_foreach(400, || { c += 1; total1 += c as u64; c });
+            s.send_foreach(400, |_| { c += 1; total1 += c as u64; c });
             r.recv(|d| {
                 for z in d.iter().take(300) { total2 += *z as u64 };
                 ::std::cmp::min(300, d.len())
