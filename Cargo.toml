@@ -1,7 +1,7 @@
 [package]
 
 name = "fdringbuf"
-version = "0.0.2"
+version = "0.1.0"
 authors = ["David Henningsson <diwic@ubuntu.com>"]
 
 description = "Ringbuffer with FD signalling - fast IPC without memory copies!"
@@ -11,10 +11,15 @@ license = "Apache-2.0/MIT"
 
 [dependencies]
 libc = "*"
+log = "*"
 
 [dev-dependencies.nix]
 nix = "*"
-# git = "https://github.com/carllerche/nix-rust"
+# Nix on crates.io is currently broken w r t eventfd
+git = "https://github.com/carllerche/nix-rust"
+
+[dev-dependencies.mio]
+mio = "*"
 
 [features]
 default = ["nix/eventfd"]

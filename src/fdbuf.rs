@@ -7,28 +7,28 @@
 
 use std::os::unix::io::RawFd;
 use std::io;
+use std::ops::DerefMut;
 
-use ringbuf::Sender as RSender;
-use ringbuf::Receiver as RReceiver;
 
-pub struct Sender<'a, T: 'a + Copy> {
-    inner: RSender<'a, T>,
+pub struct Sender<T, U> {
+    inner: ::ringbuf::Sender<T, U>,
     signal_fd: RawFd,
     wait_fd: RawFd,
 }
 
-pub struct Receiver<'a, T: 'a + Copy> {
-    inner: RReceiver<'a, T>,
+pub struct Receiver<T, U> {
+    inner: ::ringbuf::Receiver<T, U>,
     signal_fd: RawFd,
     wait_fd: RawFd,
 }
 
-unsafe impl<'a, T: Copy> Send for Sender<'a, T> {}
+/*unsafe impl<'a, T: Copy> Send for Sender<'a, T> {}
 unsafe impl<'a, T: Copy> Send for Receiver<'a, T> {}
+*/
 
 fn write_fd(fd: RawFd) -> io::Result<()> {
     let e = unsafe { ::libc::write(fd, &1u64 as *const _ as *const ::libc::c_void, ::std::mem::size_of::<u64>() as ::libc::size_t) };
-    //println!("write {} to fd {}", e, fd);
+    trace!("write {} to fd {}", e, fd);
     if e == -1 { return Err(io::Error::last_os_error()) }
     assert!(e > 0);
     Ok(())
@@ -38,27 +38,27 @@ fn flush_fd(fd: RawFd) -> io::Result<()> {
     type Arr = [u64; 32];
     let b: Arr = unsafe { ::std::mem::uninitialized() };
     let e = unsafe { ::libc::read(fd, b.as_ptr() as *mut ::libc::c_void, ::std::mem::size_of::<Arr>() as ::libc::size_t) };
-    //println!("read {} from fd {}", e, fd);
+    trace!("read {} from fd {}", e, fd);
     if e == -1 { return Err(io::Error::last_os_error()) }
     assert!(e > 0);
     Ok(())
 }
 
-
-impl<'a, T: Copy> Sender<'a, T> {
+impl<T, U> Sender<T, U> {
 
     /// Returns number of items that can be written to the buffer (until it's full).
     /// f: This closure returns a tuple of (items written, please call me again).
-    /// The array sent to the closure is an "out" parameter and contains
-    /// garbage data on entering the closure.
-    pub fn send<F: FnMut(&mut [T]) -> (usize, bool)>(&mut self, mut f: F) -> io::Result<usize> {
+    /// The pointer sent to the closure is an "out" parameter and contains
+    /// garbage data on entering the closure. The usize parameter is the number of items that
+    /// can be filled.
+    pub fn send<F: FnMut(*mut T, usize) -> (usize, bool)>(&mut self, mut f: F) -> io::Result<usize> {
         let mut r = 0;
         let mut last;
         let mut was_empty = false;
         loop {
             let mut repeat = false;
-            let (ll, wempty) = self.inner.send(|buf| {
-                let (rr, rep) = f(buf);
+            let (ll, wempty) = self.inner.send(|buf, s| {
+                let (rr, rep) = f(buf, s);
                 repeat = rep;
                 r += rr;
                 rr
@@ -70,6 +70,25 @@ impl<'a, T: Copy> Sender<'a, T> {
         if r > 0 && was_empty { try!(write_fd(self.signal_fd)) };
         Ok(last)
     }
+
+    /// "Safe" version of send. Will call your closure up to "count" times
+    /// and depend on RVO to avoid memory copies.
+    /// Will not block in case the buffer gets full.
+    ///
+    /// Returns number of items that can be written to the buffer (0 means the buffer is full).
+    pub fn send_foreach<F: FnMut() -> T>(&mut self, count: usize, mut f: F) -> io::Result<usize> {
+        let mut w = 0;
+        let (mut free_items, mut was_empty) = self.inner.send_foreach(count, || { w += 1; f() });
+        if free_items > 0 && w < count {
+            let (freeitems, wempty) = self.inner.send_foreach(count - w, || { w += 1; f() });
+            was_empty |= wempty;
+            free_items = freeitems;
+        }
+
+        if count > 0 && was_empty { try!(write_fd(self.signal_fd)) };
+        Ok(free_items)
+    }
+
 
     /// Returns fd to wait for, and number of items that can be written
     /// You should only wait for this fd if the number is zero.
@@ -86,7 +105,7 @@ impl<'a, T: Copy> Sender<'a, T> {
 
 }
 
-impl<'a, T: Copy> Receiver<'a, T> {
+impl<T, U> Receiver<T, U> {
 
     /// Returns remaining items that can be read.
     /// The second item is true if the buffer was full but read from
@@ -128,28 +147,6 @@ impl<'a, T: Copy> Receiver<'a, T> {
 
 }
 
-/*
-#[unsafe_destructor]
-impl<'a, T: Copy> Drop for Sender<'a, T> {
-    fn drop(&mut self) {
-        unsafe {
-            ::libc::close(self.wait_fd);
-            ::libc::close(self.signal_fd);
-        }
-    }
-}
-
-#[unsafe_destructor]
-impl<'a, T: Copy> Drop for Receiver<'a, T> {
-    fn drop(&mut self) {
-        unsafe {
-            ::libc::close(self.wait_fd);
-            ::libc::close(self.signal_fd);
-        }
-    }
-}
-*/
-
 #[derive(Debug, Copy, Clone)]
 pub struct Pipe {
     pub reader: RawFd,
@@ -159,9 +156,9 @@ pub struct Pipe {
 /// Creates a channel with fd signalling.
 /// Does not take ownership of the fds - they will not be closed
 /// when Sender and Receiver goes out of scope.
-pub fn channel<'a, T: Copy>(slice: &'a mut[u8], empty: Pipe, full: Pipe) ->
-        (Sender<'a, T>, Receiver<'a, T>) {
-    let (s, r) = ::ringbuf::channel(slice);
+pub fn channel<T: Send + Copy, U: Send + DerefMut<Target=[u8]>>(mem: U, empty: Pipe, full: Pipe) ->
+        (Sender<T, U>, Receiver<T, U>) {
+    let (s, r) = ::ringbuf::channel(mem);
     (Sender { inner: s, signal_fd: empty.writer, wait_fd: full.reader },
      Receiver { inner: r, signal_fd: full.writer, wait_fd: empty.reader })
 }
@@ -220,10 +217,8 @@ mod tests {
     }
 
     fn run400_300_1024_bench(b: &mut test::Bencher, pipe1: Pipe, pipe2: Pipe) {
-        let mut q: Vec<u8> = vec![0; ::ringbuf::channel_bufsize::<i32>(1024)];
-        // Temporary workaround until the new scoped API is stable
-        let scoped_workaround: &'static mut [u8] = unsafe { ::std::mem::transmute(&mut *q) };
-        let (mut s, mut r) = super::channel::<i32>(scoped_workaround, pipe1, pipe2);
+        let q = vec![0u8; ::ringbuf::channel_bufsize::<i32>(1024)];
+        let (mut s, mut r) = super::channel::<i32, _>(q, pipe1, pipe2);
 
         let guard = ::std::thread::spawn(move || {
             let mut sum = 0;
@@ -237,7 +232,7 @@ mod tests {
                 }).unwrap();
                 if quit { break; }
                 if can_recv == 0 {
-                    //println!("Recv wait");
+                    debug!("Recv wait");
                     wait_epoll(waitfd);
                     r.wait_clear().unwrap();
                 };
@@ -249,18 +244,15 @@ mod tests {
         let mut total1 = 0;
         let waitfd = make_epoll(s.wait_status().0);
         b.iter(|| {
-            let can_send = s.send(|d| {
-                let mut c = 0;
-                for z in d.iter_mut().take(400) { *z = c; total1 += c as u64; c += 1; };
-                (c as usize, false)
-            }).unwrap();
+            let mut c = 0;
+            let can_send = s.send_foreach(400, || { c += 1; total1 += c as u64; c }).unwrap();
             if can_send == 0 {
-                 //println!("Send wait");
+                 debug!("Send wait");
                  wait_epoll(waitfd);
                  s.wait_clear().unwrap();
             };
         });
-        s.send(|d| { d[0] = -1; (1, false) }).unwrap();
+        s.send_foreach(1, || -1).unwrap();
         unsafe { ::libc::close(waitfd) };
         let total2 = guard.join().unwrap();
         assert_eq!(total1, total2);
