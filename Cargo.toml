@@ -2,12 +2,13 @@
 
 name = "fdringbuf"
 version = "0.1.0"
-authors = ["David Henningsson <diwic@ubuntu.com>"]
+authors = ["David Henningsson <coding@diwic.se>"]
 
-description = "Ringbuffer with FD signalling - fast IPC without memory copies!"
+description = "Deprecated - use the shmem-ipc crate instead"
 repository = "https://github.com/diwic/fdringbuf-rs"
 keywords = ["ringbuffer", "fd", "IPC", "filedescriptor", "eventfd"]
 license = "Apache-2.0/MIT"
+maintenance = { status = "deprecated" }
 
 [dependencies]
 libc = "*"

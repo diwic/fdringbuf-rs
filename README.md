@@ -1,3 +1,11 @@
+## Deprecation notice ##
+
+This crate has been superseded by the shmem-ipc crate, see
+https://github.com/diwic/shmem-ipc
+
+It contains essentially the same ringbuffer implementation and contains
+more building blocks for setting the ringbuffer up between untrusted processes.
+
 ### Ringbuffer with fd signalling - fast IPC without memory copies!
 
 This is an attempt to make the most efficient, fast, and flexible
